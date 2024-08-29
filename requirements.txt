@@ -1,5 +1,5 @@
 shiny
 leaflet
-XML
+xml2
 lubridate
 ggplot2

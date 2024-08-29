@@ -1,6 +1,6 @@
 library(shiny)
 library(leaflet)
-library(XML)
+library(xml2)
 library(lubridate)
 library(ggplot2)
 
@@ -33,16 +33,13 @@ server <- function(input, output, session) {
       filename <- input$tcx_files$name[i]
       
       tryCatch({
-        tcx <- xmlParse(file)
-        
-        # Extract trackpoints
-        trackpoints <- xpathApply(tcx, "//ns:Trackpoint", namespaces = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"))
+        tcx <- read_xml(file)
         
         # Extract data
-        times <- as.POSIXct(xpathSApply(tcx, "//ns:Time", xmlValue, namespaces = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2")), format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC")
-        lats <- as.numeric(xpathSApply(tcx, "//ns:LatitudeDegrees", xmlValue, namespaces = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2")))
-        lons <- as.numeric(xpathSApply(tcx, "//ns:LongitudeDegrees", xmlValue, namespaces = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2")))
-        heart_rates <- as.numeric(xpathSApply(tcx, "//ns:HeartRateBpm/ns:Value", xmlValue, namespaces = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2")))
+        times <- as.POSIXct(xml_text(xml_find_all(tcx, "//ns:Time", ns = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"))), format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC")
+        lats <- as.numeric(xml_text(xml_find_all(tcx, "//ns:LatitudeDegrees", ns = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"))))
+        lons <- as.numeric(xml_text(xml_find_all(tcx, "//ns:LongitudeDegrees", ns = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"))))
+        heart_rates <- as.numeric(xml_text(xml_find_all(tcx, "//ns:HeartRateBpm/ns:Value", ns = c(ns = "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"))))
         
         # Calculate duration in seconds
         duration_seconds <- as.numeric(difftime(max(times), min(times), units = "secs"))
