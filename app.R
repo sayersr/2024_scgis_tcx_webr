@@ -6,8 +6,8 @@ library(plotly)
 library(dplyr)
 library(tidyr)
 
-# Define contrasting colors
-CONTRASTING_COLORS <- c("#FF0000", "#00FF00", "#0000FF", "#FF00FF", "#00FFFF", "#FFFF00", "#800000", "#008000", "#000080", "#800080")
+# Define colorblind-friendly colors
+COLORBLIND_FRIENDLY_COLORS <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
 
 convert_tcx <- function(tcx_content) {
   tcx <- read_xml(tcx_content)
@@ -37,7 +37,7 @@ ui <- fluidPage(
     tags$script(src = "https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"),
     tags$script(src = "https://cdn.plot.ly/plotly-latest.min.js")
   ),
-  titlePanel("TCX Data Viewer"),
+  titlePanel("webR TCX Demo"),
   sidebarLayout(
     sidebarPanel(
       fileInput("tcx_files", "Upload TCX file(s)", accept = ".tcx", multiple = TRUE),
@@ -72,7 +72,7 @@ server <- function(input, output, session) {
         tcx_content <- paste(tcx_content, collapse = "\n")
         result <- convert_tcx(tcx_content)
         
-        color <- CONTRASTING_COLORS[(i - 1) %% length(CONTRASTING_COLORS) + 1]
+        color <- COLORBLIND_FRIENDLY_COLORS[(i - 1) %% length(COLORBLIND_FRIENDLY_COLORS) + 1]
         processed_data[[filename]] <- c(
           result,
           list(
@@ -91,13 +91,8 @@ server <- function(input, output, session) {
         )
         df$elapsed_time <- as.numeric(difftime(df$timestamp, min(df$timestamp), units = "secs")) / 60
         all_data[[i]] <- df
-        
-        print(paste("Processed file:", filename))
-        print(paste("Number of rows:", nrow(df)))
-        print(paste("Columns:", paste(colnames(df), collapse = ", ")))
       }, error = function(e) {
         processed_data[[filename]] <- list(error = paste("Error processing TCX data:", e$message))
-        print(paste("Error processing file:", filename, "-", e$message))
       })
     }
     
@@ -106,11 +101,6 @@ server <- function(input, output, session) {
     if (length(all_data) > 0) {
       combined_data <- do.call(rbind, all_data)
       timeline_data(combined_data)
-      print("Combined data:")
-      print(paste("Total rows:", nrow(combined_data)))
-      print(paste("Columns:", paste(colnames(combined_data), collapse = ", ")))
-    } else {
-      print("No data processed successfully")
     }
   })
   
@@ -153,7 +143,7 @@ server <- function(input, output, session) {
     all_points <- do.call(rbind, lapply(data, function(x) x$points))
     
     m <- leaflet() %>%
-      addTiles() %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%  # Change to a grayscale basemap
       fitBounds(
         lng1 = min(all_points$lon, na.rm = TRUE),
         lat1 = min(all_points$lat, na.rm = TRUE),
@@ -169,7 +159,7 @@ server <- function(input, output, session) {
             lat = file_data$points$lat,
             lng = file_data$points$lon,
             color = file_data$color,
-            weight = 2.5,
+            weight = 3,
             opacity = 0.8,
             popup = filename
           ) %>%
@@ -177,7 +167,8 @@ server <- function(input, output, session) {
             lat = file_data$points$lat[1],
             lng = file_data$points$lon[1],
             radius = 6,
-            color = "green",
+            color = "black",
+            fillColor = file_data$color,
             fillOpacity = 1,
             popup = paste("Start -", filename)
           ) %>%
@@ -185,7 +176,8 @@ server <- function(input, output, session) {
             lat = file_data$points$lat[nrow(file_data$points)],
             lng = file_data$points$lon[nrow(file_data$points)],
             radius = 6,
-            color = "red",
+            color = "black",
+            fillColor = file_data$color,
             fillOpacity = 1,
             popup = paste("End -", filename)
           )
@@ -205,19 +197,12 @@ server <- function(input, output, session) {
     data_info <- timeline_data()
     req(nrow(data_info) > 0)
     
-    print("Rendering heart rate plot")
-    print(paste("Number of rows in data_info:", nrow(data_info)))
-    print(paste("Columns in data_info:", paste(colnames(data_info), collapse = ", ")))
-    
     plot_data <- plot_ly()
     
     for (file_name in unique(data_info$file)) {
       file_data <- data_info %>% 
         filter(file == file_name) %>% 
         drop_na(heart_rate, elapsed_time)
-      
-      print(paste("Processing file:", file_name))
-      print(paste("Rows for this file:", nrow(file_data)))
       
       if (nrow(file_data) > 0) {
         plot_data <- plot_data %>% add_trace(
@@ -231,8 +216,6 @@ server <- function(input, output, session) {
           text = ~sprintf("File: %s<br>Time: %.2f min<br>Heart Rate: %d bpm", file, elapsed_time, heart_rate),
           data = file_data
         )
-      } else {
-        print(paste("No valid data for file:", file_name))
       }
     }
     
@@ -240,36 +223,28 @@ server <- function(input, output, session) {
     min_hr <- min(data_info$heart_rate, na.rm = TRUE)
     max_hr <- max(data_info$heart_rate, na.rm = TRUE)
     
-    print(paste("Max time:", max_time))
-    print(paste("Heart rate range:", min_hr, "-", max_hr))
-    
     plot_data %>% 
-  layout(
-    title = "Heart Rate Over Time",
-    xaxis = list(
-      title = "Time Elapsed (minutes)",
-      range = c(0, max_time)
-    ),
-    yaxis = list(
-      title = "Heart Rate (bpm)",
-      range = c(min_hr * 0.9, max_hr * 1.1)
-    ),
-    hovermode = "closest",
-    legend = list(orientation = "h", y = 1.02, yanchor = "bottom", x = 1, xanchor = "right")
-  ) %>%
-  event_register("plotly_hover") %>%
-  config(displayModeBar = FALSE)  # This line disables the mode bar, which can sometimes interfere with events
+      layout(
+        title = "Heart Rate Over Time",
+        xaxis = list(
+          title = "Time Elapsed (minutes)",
+          range = c(0, max_time)
+        ),
+        yaxis = list(
+          title = "Heart Rate (bpm)",
+          range = c(min_hr * 0.9, max_hr * 1.1)
+        ),
+        hovermode = "closest",
+        legend = list(orientation = "h", y = 1.02, yanchor = "bottom", x = 1, xanchor = "right")
+      ) %>%
+      event_register("plotly_hover") %>%
+      config(displayModeBar = FALSE)
   })
   
   observeEvent(event_data("plotly_hover"), {
     hover_data <- event_data("plotly_hover")
-    print("Hover event triggered")
-    print(str(hover_data))  # Print the structure of hover_data for debugging
     
     if (!is.null(hover_data) && !is.null(hover_data$x)) {
-      print("Hover event detected")
-      print(paste("Hover time:", hover_data$x))
-      
       hover_time <- hover_data$x
       data_info <- timeline_data()
       
@@ -280,9 +255,6 @@ server <- function(input, output, session) {
             filter(abs(elapsed_time - hover_time) == min(abs(elapsed_time - hover_time))) %>%
             slice(1) %>%
             ungroup()
-          
-          print("Current data for map update:")
-          print(current_data)
           
           if (nrow(current_data) > 0) {
             leafletProxy("map") %>%
@@ -297,17 +269,11 @@ server <- function(input, output, session) {
                 fillOpacity = 0.8,
                 popup = ~sprintf("File: %s<br>Heart Rate: %d bpm<br>Time: %.2f min", file, heart_rate, elapsed_time)
               )
-          } else {
-            print("No data found for map update")
           }
         }, error = function(e) {
           print(paste("Error updating map:", e$message))
         })
-      } else {
-        print("No data available for map update")
       }
-    } else {
-      print("Hover event data is null or incomplete")
     }
   })
   
