@@ -64,3 +64,7 @@ To run this application locally:
 ## Shinylive Version
 
 For a web-based version of this application, visit [https://sayersr.github.io/2024_scgis_tcx_webr/](https://sayersr.github.io/2024_scgis_tcx_webr/). This version uses Shinylive to run the R Shiny application directly in your web browser.
+
+## Python Version
+
+The Python version of this can be found at [https://github.com/sayersr/2024_scgis_tcx_pyodide/](https://github.com/sayersr/2024_scgis_tcx_pyodide).
